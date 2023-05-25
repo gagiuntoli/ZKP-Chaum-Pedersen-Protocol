@@ -30,10 +30,6 @@ pub fn random_number() -> u32 {
     rng.gen()
 }
 
-fn main() {
-    println!("{}", random_number());
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
