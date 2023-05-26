@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
 
 pub mod zkp_auth {
@@ -11,7 +13,20 @@ use zkp_auth::{
 };
 
 #[derive(Debug, Default)]
-pub struct AuthImpl {}
+pub struct UserInfo {
+    pub y1: u32,
+    pub y2: u32,
+    pub r1: u32,
+    pub r2: u32,
+    pub c: u32,
+    pub session_id: String,
+}
+
+#[derive(Debug, Default)]
+pub struct AuthImpl {
+    pub user_info: Mutex<HashMap<String, UserInfo>>,
+    pub auth_info: Mutex<HashMap<String, String>>,
+}
 
 #[tonic::async_trait]
 impl Auth for AuthImpl {
@@ -21,9 +36,22 @@ impl Auth for AuthImpl {
     ) -> Result<Response<RegisterResponse>, Status> {
         println!("Got a request: {:?}", request);
 
-        // let reply = hello_world::HelloReply {
-        //     message: format!("Hello {}!", request.into_inner().name).into(),
-        // };
+        let request = request.into_inner();
+        let user_id = request.user;
+
+        let user_info = UserInfo {
+            y1: request.y1,
+            y2: request.y2,
+            r1: 0,
+            r2: 0,
+            c: 0,
+            session_id: String::new(),
+        };
+
+        let user_info_hashmap = &mut self.user_info.lock().unwrap(); // TODO: check if we can improve this `unwrap`
+        user_info_hashmap.insert(user_id, user_info);
+
+        println!("{:?}", user_info_hashmap);
 
         Ok(Response::new(RegisterResponse {}))
     }
