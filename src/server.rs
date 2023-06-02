@@ -1,7 +1,9 @@
+use num_bigint::BigUint;
+use num_traits::Zero;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tonic::{transport::Server, Code, Request, Response, Status};
-use zkp_course::{random_number, random_string, verify, G, H, P};
+use zkp_course::{deserialize, random_number, random_string, serialize, verify, G, H, P};
 
 pub mod zkp_auth {
     include!("./zkp_auth.rs"); // The string specified here must match the proto package name
@@ -15,11 +17,11 @@ use zkp_auth::{
 
 #[derive(Debug, Default)]
 pub struct UserInfo {
-    pub y1: u32,
-    pub y2: u32,
-    pub r1: u32,
-    pub r2: u32,
-    pub c: u32,
+    pub y1: BigUint,
+    pub y2: BigUint,
+    pub r1: BigUint,
+    pub r2: BigUint,
+    pub c: BigUint,
     pub session_id: String,
 }
 
@@ -41,11 +43,11 @@ impl Auth for AuthImpl {
         let user_id = request.user;
 
         let user_info = UserInfo {
-            y1: request.y1,
-            y2: request.y2,
-            r1: 0,
-            r2: 0,
-            c: 0,
+            y1: deserialize(&request.y1),
+            y2: deserialize(&request.y2),
+            r1: BigUint::zero(),
+            r2: BigUint::zero(),
+            c: BigUint::zero(),
             session_id: String::new(),
         };
 
@@ -70,11 +72,11 @@ impl Auth for AuthImpl {
 
         if let Some(user_info) = user_info_hashmap.get_mut(&user_id) {
             let auth_id = random_string(6);
-            let c = random_number() % 10;
+            let c = random_number();
 
-            user_info.r1 = request.r1;
-            user_info.r2 = request.r2;
-            user_info.c = c;
+            user_info.r1 = deserialize(&request.r1);
+            user_info.r2 = deserialize(&request.r2);
+            user_info.c = c.clone();
 
             println!("{:?}", user_info_hashmap);
 
@@ -84,7 +86,7 @@ impl Auth for AuthImpl {
 
             Ok(Response::new(AuthenticationChallengeResponse {
                 auth_id,
-                c,
+                c: serialize(&c),
             }))
         } else {
             Err(Status::new(
@@ -107,14 +109,24 @@ impl Auth for AuthImpl {
             let user_info_hashmap = &mut self.user_info.lock().unwrap(); // TODO: check if we can improve this `unwrap`
 
             if let Some(user_info) = user_info_hashmap.get_mut(user_id) {
-                let s = request.s;
-                let y1 = user_info.y1;
-                let y2 = user_info.y2;
-                let r1 = user_info.r1;
-                let r2 = user_info.r2;
-                let c = user_info.c;
+                let s = deserialize(&request.s);
+                let y1 = &user_info.y1;
+                let y2 = &user_info.y2;
+                let r1 = &user_info.r1;
+                let r2 = &user_info.r2;
+                let c = &user_info.c;
 
-                if verify(G, H, P, y1, y2, r1, r2, c, s) {
+                if verify(
+                    &deserialize(G),
+                    &deserialize(H),
+                    &deserialize(P),
+                    y1,
+                    y2,
+                    r1,
+                    r2,
+                    c,
+                    &s,
+                ) {
                     let session_id = random_string(6);
                     user_info.session_id = session_id.clone();
 
